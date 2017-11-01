@@ -671,6 +671,10 @@ func (d *DotGit) CountLooseRefs() (int, error) {
 // TODO: before trying to get this merged upstream, move it into a
 // custom kbfsgit Storer implementation, and rewrite this function to
 // work correctly on a general filesystem.
+//
+// TODO: add an "all" boolean like the `git pack-refs --all` flag.
+// When `all` is false, it would only pack refs that have already been
+// packed, plus all tags.
 func (d *DotGit) PackRefs() (err error) {
 	// Lock packed-refs, and create it if it doesn't exist yet.
 	f, err := d.fs.Open(packedRefsPath)
