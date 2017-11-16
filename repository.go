@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/src-d/go-git.v4/config"
 	"gopkg.in/src-d/go-git.v4/internal/revision"
@@ -1013,7 +1014,20 @@ func (r *Repository) ResolveRevision(rev plumbing.Revision) (*plumbing.Hash, err
 	return &commit.Hash, nil
 }
 
-func (r *Repository) RepackObjects() (err error) {
+type RepackConfig struct {
+	// StatusChan for status updates, may be nil.
+	StatusChan plumbing.StatusChan
+	// UseRefDeltas configures whether packfile encoder will use reference deltas.
+	// By default OFSDeltaObject is used.
+	UseRefDeltas bool
+	// PackWindow for packing objects.
+	PackWindow uint
+	// OnlyDeletePacksOlderThan if set to non-zero value
+	// selects only objects older than the time provided.
+	OnlyDeletePacksOlderThan time.Time
+}
+
+func (r *Repository) RepackObjects(cfg *RepackConfig) (err error) {
 	// Get the existing object packs.
 	hs, err := r.Storer.ObjectPacks()
 	if err != nil {
@@ -1021,7 +1035,7 @@ func (r *Repository) RepackObjects() (err error) {
 	}
 
 	// Create a new pack.
-	nh, err := r.createNewObjectPack()
+	nh, err := r.createNewObjectPack(cfg)
 	if err != nil {
 		return err
 	}
@@ -1032,7 +1046,7 @@ func (r *Repository) RepackObjects() (err error) {
 		if h == nh {
 			continue
 		}
-		err = r.Storer.DeleteObjectPackAndIndex(h)
+		err = r.Storer.DeleteOldObjectPackAndIndex(h, cfg.OnlyDeletePacksOlderThan)
 		if err != nil {
 			return err
 		}
@@ -1044,12 +1058,12 @@ func (r *Repository) RepackObjects() (err error) {
 // createNewObjectPack is a helper for RepackObjects taking care
 // of creating a new pack. It is used so the the PackfileWriter
 // deferred close has the right scope.
-func (r *Repository) createNewObjectPack() (h plumbing.Hash, err error) {
+func (r *Repository) createNewObjectPack(cfg *RepackConfig) (h plumbing.Hash, err error) {
 	pfw, ok := r.Storer.(storer.PackfileWriter)
 	if !ok {
 		return h, fmt.Errorf("Repository storer is not a storer.PackfileWriter")
 	}
-	wc, err := pfw.PackfileWriter(nil)
+	wc, err := pfw.PackfileWriter(cfg.StatusChan)
 	if err != nil {
 		return h, err
 	}
@@ -1066,8 +1080,8 @@ func (r *Repository) createNewObjectPack() (h plumbing.Hash, err error) {
 	if err != nil {
 		return h, err
 	}
-	enc := packfile.NewEncoder(wc, r.Storer, false)
-	h, err = enc.Encode(objs, 10, nil)
+	enc := packfile.NewEncoder(wc, r.Storer, cfg.UseRefDeltas)
+	h, err = enc.Encode(objs, cfg.PackWindow, cfg.StatusChan)
 	if err != nil {
 		return h, err
 	}
