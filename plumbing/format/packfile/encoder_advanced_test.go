@@ -3,6 +3,7 @@ package packfile_test
 import (
 	"bytes"
 	"math/rand"
+	"testing"
 
 	"gopkg.in/src-d/go-git.v4/plumbing"
 	. "gopkg.in/src-d/go-git.v4/plumbing/format/packfile"
@@ -21,6 +22,10 @@ type EncoderAdvancedSuite struct {
 var _ = Suite(&EncoderAdvancedSuite{})
 
 func (s *EncoderAdvancedSuite) TestEncodeDecode(c *C) {
+	if testing.Short() {
+		c.Skip("skipping test in short mode.")
+	}
+
 	fixs := fixtures.Basic().ByTag("packfile").ByTag(".git")
 	fixs = append(fixs, fixtures.ByURL("https://github.com/src-d/go-git.git").
 		ByTag("packfile").ByTag(".git").One())
@@ -33,6 +38,10 @@ func (s *EncoderAdvancedSuite) TestEncodeDecode(c *C) {
 }
 
 func (s *EncoderAdvancedSuite) TestEncodeDecodeNoDeltaCompression(c *C) {
+	if testing.Short() {
+		c.Skip("skipping test in short mode.")
+	}
+
 	fixs := fixtures.Basic().ByTag("packfile").ByTag(".git")
 	fixs = append(fixs, fixtures.ByURL("https://github.com/src-d/go-git.git").
 		ByTag("packfile").ByTag(".git").One())
@@ -68,15 +77,17 @@ func (s *EncoderAdvancedSuite) testEncodeDecode(c *C, storage storer.Storer, pac
 
 	buf := bytes.NewBuffer(nil)
 	enc := NewEncoder(buf, storage, false)
-	_, err = enc.Encode(hashes, packWindow, nil)
+	encodeHash, err = enc.Encode(hashes, packWindow, nil)
 	c.Assert(err, IsNil)
 
 	scanner := NewScanner(buf)
 	storage = memory.NewStorage()
 	d, err := NewDecoder(scanner, storage)
 	c.Assert(err, IsNil)
-	_, err = d.Decode(nil)
+	decodeHash, err = d.Decode(nil)
 	c.Assert(err, IsNil)
+
+	c.Assert(encodeHash, Equals, decodeHash)
 
 	objIter, err = storage.IterEncodedObjects(plumbing.AnyObject)
 	c.Assert(err, IsNil)

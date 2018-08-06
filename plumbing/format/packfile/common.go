@@ -47,8 +47,7 @@ func UpdateObjectStorage(
 func writePackfileToObjectStorage(
 	sw storer.PackfileWriter,
 	packfile io.Reader,
-	statusChan plumbing.StatusChan) error {
-	var err error
+	statusChan plumbing.StatusChan) (err error) {
 	w, err := sw.PackfileWriter(statusChan)
 	if err != nil {
 		return err
