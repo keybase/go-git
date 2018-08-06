@@ -22,12 +22,12 @@ func Objects(
 	ignore []plumbing.Hash,
 	statusChan plumbing.StatusChan,
 ) ([]plumbing.Hash, error) {
-	ignore, err := objects(s, ignore, nil, nil, true)
+	ignore, err := objects(s, ignore, nil, nil, true, false)
 	if err != nil {
 		return nil, err
 	}
 
-	return objects(s, objs, ignore, statusChan, false)
+	return objects(s, objs, ignore, statusChan, false, true)
 }
 
 func objects(
@@ -35,11 +35,16 @@ func objects(
 	objects,
 	ignore []plumbing.Hash,
 	statusChan plumbing.StatusChan,
-	allowMissingObjects bool,
+	allowMissingObjects, checkParents bool,
 ) ([]plumbing.Hash, error) {
 	seen := hashListToSet(ignore)
 	result := make(map[plumbing.Hash]bool)
 	visited := make(map[plumbing.Hash]bool)
+
+	fmt.Printf("OBJECTS: %v\n", objects)
+	defer func() {
+		fmt.Printf("DONE OBJECTS: %v\n", objects)
+	}()
 
 	update := plumbing.StatusUpdate{Stage: plumbing.StatusCount}
 	statusChan.SendUpdate(update)
@@ -54,7 +59,7 @@ func objects(
 	}
 
 	for _, h := range objects {
-		if err := processObject(s, h, seen, visited, ignore, walkerFunc, statusChan); err != nil {
+		if err := processObject(s, h, seen, visited, ignore, walkerFunc, statusChan, checkParents); err != nil {
 			if allowMissingObjects && err == plumbing.ErrObjectNotFound {
 				continue
 			}
@@ -78,6 +83,7 @@ func processObject(
 	ignore []plumbing.Hash,
 	walkerFunc func(h plumbing.Hash),
 	statusChan plumbing.StatusChan,
+	checkParents bool,
 ) error {
 	if seen[h] {
 		return nil
@@ -95,12 +101,12 @@ func processObject(
 
 	switch do := do.(type) {
 	case *object.Commit:
-		return reachableObjects(do, seen, visited, ignore, walkerFunc)
+		return reachableObjects(do, seen, visited, ignore, walkerFunc, checkParents)
 	case *object.Tree:
-		return iterateCommitTrees(seen, do, walkerFunc)
+		return iterateCommitTrees(seen, do, walkerFunc, checkParents)
 	case *object.Tag:
 		walkerFunc(do.Hash)
-		return processObject(s, do.Target, seen, visited, ignore, walkerFunc, statusChan)
+		return processObject(s, do.Target, seen, visited, ignore, walkerFunc, statusChan, checkParents)
 	case *object.Blob:
 		walkerFunc(do.Hash)
 	default:
@@ -121,6 +127,7 @@ func reachableObjects(
 	visited map[plumbing.Hash]bool,
 	ignore []plumbing.Hash,
 	cb func(h plumbing.Hash),
+	checkParents bool,
 ) error {
 	i := object.NewCommitPreorderIter(commit, seen, ignore)
 	pending := make(map[plumbing.Hash]bool)
@@ -136,19 +143,29 @@ func reachableObjects(
 			return err
 		}
 
+		fmt.Printf("PROCESSING REACHABLE %s, seen=%v\n", commit.Hash, seen)
+
 		if pending[commit.Hash] {
 			delete(pending, commit.Hash)
 		}
 
-		addPendingParents(pending, visited, commit)
+		if seen[commit.Hash] {
+			if len(pending) == 0 {
+				break
+			}
+			fmt.Printf("SEEN %s, BUT PENDING=%v\n", commit.Hash, pending)
+			continue
+		}
+
+		if checkParents {
+			addPendingParents(pending, visited, commit)
+		}
 
 		if visited[commit.Hash] && len(pending) == 0 {
 			break
 		}
 
-		if seen[commit.Hash] {
-			continue
-		}
+		fmt.Printf("PROCESSING CB FOR REACHABLE %s\n", commit.Hash)
 
 		cb(commit.Hash)
 
@@ -157,8 +174,12 @@ func reachableObjects(
 			return err
 		}
 
-		if err := iterateCommitTrees(seen, tree, cb); err != nil {
+		if err := iterateCommitTrees(seen, tree, cb, checkParents); err != nil {
 			return err
+		}
+
+		if !checkParents {
+			break
 		}
 	}
 
@@ -178,6 +199,7 @@ func iterateCommitTrees(
 	seen map[plumbing.Hash]bool,
 	tree *object.Tree,
 	cb func(h plumbing.Hash),
+	checkParents bool,
 ) error {
 	if seen[tree.Hash] {
 		return nil
@@ -185,7 +207,7 @@ func iterateCommitTrees(
 
 	cb(tree.Hash)
 
-	treeWalker := object.NewTreeWalker(tree, true, seen)
+	treeWalker := object.NewTreeWalker(tree, checkParents, seen)
 
 	for {
 		_, e, err := treeWalker.Next()
@@ -199,6 +221,8 @@ func iterateCommitTrees(
 		if e.Mode == filemode.Submodule {
 			continue
 		}
+
+		fmt.Printf("TREE-WALKING %s\n", e.Hash)
 
 		if seen[e.Hash] {
 			continue

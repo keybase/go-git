@@ -149,10 +149,12 @@ func (r *Remote) PushContext(ctx context.Context, o *PushOptions) (err error) {
 	var hashesToPush []plumbing.Hash
 	// Avoid the expensive revlist operation if we're only doing deletes.
 	if !allDelete {
+		fmt.Printf("PUSHING %v, have=%v\n", objects, haves)
 		hashesToPush, err = revlist.Objects(r.s, objects, haves, o.StatusChan)
 		if err != nil {
 			return err
 		}
+		fmt.Printf("DONE PUSHING %v, have=%v\n", objects, haves)
 	}
 
 	rs, err := pushHashes(ctx, s, r.s, req, hashesToPush, o.StatusChan)
