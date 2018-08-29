@@ -31,7 +31,7 @@ type PackWriter struct {
 	result   chan error
 }
 
-func newPackWrite(fs billy.Filesystem) (*PackWriter, error) {
+func newPackWrite(fs billy.Filesystem, statusChan plumbing.StatusChan) (*PackWriter, error) {
 	fw, err := fs.TempFile(fs.Join(objectsPath, packPath), "tmp_pack_")
 	if err != nil {
 		return nil, err
@@ -43,11 +43,12 @@ func newPackWrite(fs billy.Filesystem) (*PackWriter, error) {
 	}
 
 	writer := &PackWriter{
-		fs:     fs,
-		fw:     fw,
-		fr:     fr,
-		synced: newSyncedReader(fw, fr),
-		result: make(chan error),
+		fs:         fs,
+		fw:         fw,
+		fr:         fr,
+		synced:     newSyncedReader(fw, fr),
+		result:     make(chan error),
+		//statusChan: statusChan,
 	}
 
 	go writer.buildIndex()

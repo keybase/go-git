@@ -1134,6 +1134,8 @@ func (r *Repository) ResolveRevision(rev plumbing.Revision) (*plumbing.Hash, err
 }
 
 type RepackConfig struct {
+	// StatusChan for status updates, may be nil.
+	StatusChan plumbing.StatusChan
 	// UseRefDeltas configures whether packfile encoder will use reference deltas.
 	// By default OFSDeltaObject is used.
 	UseRefDeltas bool
@@ -1192,7 +1194,7 @@ func (r *Repository) createNewObjectPack(cfg *RepackConfig) (h plumbing.Hash, er
 	if !ok {
 		return h, fmt.Errorf("Repository storer is not a storer.PackfileWriter")
 	}
-	wc, err := pfw.PackfileWriter()
+	wc, err := pfw.PackfileWriter(cfg.StatusChan)
 	if err != nil {
 		return h, err
 	}
@@ -1202,7 +1204,7 @@ func (r *Repository) createNewObjectPack(cfg *RepackConfig) (h plumbing.Hash, er
 		return h, err
 	}
 	enc := packfile.NewEncoder(wc, r.Storer, cfg.UseRefDeltas)
-	h, err = enc.Encode(objs, scfg.Pack.Window)
+	h, err = enc.Encode(objs, scfg.Pack.Window, cfg.StatusChan)
 	if err != nil {
 		return h, err
 	}

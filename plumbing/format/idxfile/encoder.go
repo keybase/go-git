@@ -5,6 +5,7 @@ import (
 	"hash"
 	"io"
 
+	//"gopkg.in/src-d/go-git.v4/plumbing"
 	"gopkg.in/src-d/go-git.v4/utils/binary"
 )
 
@@ -34,7 +35,7 @@ func (e *Encoder) Encode(idx *MemoryIndex) (int, error) {
 
 	sz := 0
 	for _, f := range flow {
-		i, err := f(idx)
+		i, err := f(idx) // FIXME statusChan
 		sz += i
 
 		if err != nil {
@@ -71,7 +72,6 @@ func (e *Encoder) encodeHashes(idx *MemoryIndex) (int, error) {
 		if pos == noMapping {
 			continue
 		}
-
 		n, err := e.Write(idx.Names[pos])
 		if err != nil {
 			return size, err

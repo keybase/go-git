@@ -5,6 +5,7 @@ import (
 	"io"
 	"sync"
 
+	//"gopkg.in/src-d/go-git.v4/plumbing"
 	"gopkg.in/src-d/go-git.v4/plumbing/storer"
 	"gopkg.in/src-d/go-git.v4/utils/ioutil"
 )
@@ -45,7 +46,7 @@ func WritePackfileToObjectStorage(
 	sw storer.PackfileWriter,
 	packfile io.Reader,
 ) (err error) {
-	w, err := sw.PackfileWriter()
+	w, err := sw.PackfileWriter(nil) // FIXME statusChan
 	if err != nil {
 		return err
 	}

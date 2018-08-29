@@ -30,7 +30,7 @@ func (s *EncoderSuite) SetUpTest(c *C) {
 }
 
 func (s *EncoderSuite) TestCorrectPackHeader(c *C) {
-	hash, err := s.enc.Encode([]plumbing.Hash{}, 10)
+	hash, err := s.enc.Encode([]plumbing.Hash{}, 10, nil)
 	c.Assert(err, IsNil)
 
 	hb := [20]byte(hash)
@@ -51,7 +51,7 @@ func (s *EncoderSuite) TestCorrectPackWithOneEmptyObject(c *C) {
 	_, err := s.store.SetEncodedObject(o)
 	c.Assert(err, IsNil)
 
-	hash, err := s.enc.Encode([]plumbing.Hash{o.Hash()}, 10)
+	hash, err := s.enc.Encode([]plumbing.Hash{o.Hash()}, 10, nil)
 	c.Assert(err, IsNil)
 
 	// PACK + VERSION(2) + OBJECT NUMBER(1)
@@ -78,13 +78,13 @@ func (s *EncoderSuite) TestMaxObjectSize(c *C) {
 	o.SetType(plumbing.CommitObject)
 	_, err := s.store.SetEncodedObject(o)
 	c.Assert(err, IsNil)
-	hash, err := s.enc.Encode([]plumbing.Hash{o.Hash()}, 10)
+	hash, err := s.enc.Encode([]plumbing.Hash{o.Hash()}, 10, nil)
 	c.Assert(err, IsNil)
 	c.Assert(hash.IsZero(), Not(Equals), true)
 }
 
 func (s *EncoderSuite) TestHashNotFound(c *C) {
-	h, err := s.enc.Encode([]plumbing.Hash{plumbing.NewHash("BAD")}, 10)
+	h, err := s.enc.Encode([]plumbing.Hash{plumbing.NewHash("BAD")}, 10, nil)
 	c.Assert(h, Equals, plumbing.ZeroHash)
 	c.Assert(err, NotNil)
 	c.Assert(err, Equals, plumbing.ErrObjectNotFound)
@@ -131,7 +131,7 @@ func (s *EncoderSuite) simpleDeltaTest(c *C) {
 	encHash, err := s.enc.encode([]*ObjectToPack{
 		srcToPack,
 		newDeltaObjectToPack(srcToPack, targetObject, deltaObject),
-	})
+	}, nil)
 	c.Assert(err, IsNil)
 
 	p, cleanup := packfileFromReader(c, s.buf)
@@ -170,7 +170,7 @@ func (s *EncoderSuite) deltaOverDeltaTest(c *C) {
 		srcToPack,
 		newDeltaObjectToPack(srcToPack, targetObject, deltaObject),
 		newDeltaObjectToPack(targetToPack, otherTargetObject, otherDeltaObject),
-	})
+	}, nil)
 	c.Assert(err, IsNil)
 
 	p, cleanup := packfileFromReader(c, s.buf)
@@ -242,7 +242,7 @@ func (s *EncoderSuite) deltaOverDeltaCyclicTest(c *C) {
 		pd2,
 		pd3,
 		pd4,
-	})
+	}, nil)
 	c.Assert(err, IsNil)
 
 	p, cleanup := packfileFromReader(c, s.buf)

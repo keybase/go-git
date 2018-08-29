@@ -38,7 +38,6 @@ func (s *IdxfileSuite) TestDecode(c *C) {
 	ok, err := idx.Contains(hash)
 	c.Assert(err, IsNil)
 	c.Assert(ok, Equals, true)
-
 	offset, err := idx.FindOffset(hash)
 	c.Assert(err, IsNil)
 	c.Assert(offset, Equals, int64(615))
@@ -83,7 +82,6 @@ func (s *IdxfileSuite) TestDecode64bitsOffsets(c *C) {
 		}
 		c.Assert(err, IsNil)
 		entries++
-
 		c.Assert(expected[e.Hash.String()], Equals, e.Offset)
 	}
 
