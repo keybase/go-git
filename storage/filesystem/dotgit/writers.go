@@ -22,13 +22,14 @@ import (
 type PackWriter struct {
 	Notify func(plumbing.Hash, *idxfile.Writer)
 
-	fs       billy.Filesystem
-	fr, fw   billy.File
-	synced   *syncedReader
-	checksum plumbing.Hash
-	parser   *packfile.Parser
-	writer   *idxfile.Writer
-	result   chan error
+	fs         billy.Filesystem
+	fr, fw     billy.File
+	synced     *syncedReader
+	checksum   plumbing.Hash
+	parser     *packfile.Parser
+	writer     *idxfile.Writer
+	result     chan error
+	statusChan plumbing.StatusChan
 }
 
 func newPackWrite(fs billy.Filesystem, statusChan plumbing.StatusChan) (*PackWriter, error) {
@@ -48,7 +49,7 @@ func newPackWrite(fs billy.Filesystem, statusChan plumbing.StatusChan) (*PackWri
 		fr:         fr,
 		synced:     newSyncedReader(fw, fr),
 		result:     make(chan error),
-		//statusChan: statusChan,
+		statusChan: statusChan,
 	}
 
 	go writer.buildIndex()
@@ -154,7 +155,7 @@ func (w *PackWriter) encodeIdx(writer io.Writer) error {
 	}
 
 	e := idxfile.NewEncoder(writer)
-	_, err = e.Encode(idx)
+	_, err = e.Encode(idx, w.statusChan)
 	return err
 }
 

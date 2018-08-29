@@ -22,7 +22,7 @@ func (s *IdxfileSuite) TestDecodeEncode(c *C) {
 
 		result := bytes.NewBuffer(nil)
 		e := NewEncoder(result)
-		size, err := e.Encode(idx)
+		size, err := e.Encode(idx, nil)
 		c.Assert(err, IsNil)
 
 		c.Assert(size, Equals, len(expected))

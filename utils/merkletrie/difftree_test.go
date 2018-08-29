@@ -476,7 +476,7 @@ func (s *DiffTreeSuite) TestIssue275(c *C) {
 }
 
 func (s *DiffTreeSuite) TestCancel(c *C) {
-	t :=  diffTreeTest{"()", "(a<> b<1> c() d<> e<2> f())", "+a +b +d +e"}
+	t := diffTreeTest{"()", "(a<> b<1> c() d<> e<2> f())", "+a +b +d +e"}
 	comment := Commentf("\n%s", "test cancel:")
 
 	a, err := fsnoder.New(t.from)
