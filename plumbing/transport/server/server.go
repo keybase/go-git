@@ -303,7 +303,7 @@ func (s *rpSession) writePackfile(r io.ReadCloser) error {
 		return nil
 	}
 
-	if err := packfile.UpdateObjectStorage(s.storer, r); err != nil {
+	if err := packfile.UpdateObjectStorage(s.storer, r, nil); err != nil {
 		_ = r.Close()
 		return err
 	}
