@@ -50,7 +50,7 @@ func (s *DiffTreeSuite) storageFromPackfile(f *fixtures.Fixture) storer.EncodedO
 	pf := f.Packfile()
 	defer pf.Close()
 
-	if err := packfile.UpdateObjectStorage(storer, pf); err != nil {
+	if err := packfile.UpdateObjectStorage(storer, pf, nil); err != nil {
 		panic(err)
 	}
 
