@@ -8,9 +8,11 @@ import (
 	"io"
 	stdioutil "io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"gopkg.in/src-d/go-billy.v4/osfs"
 	"gopkg.in/src-d/go-git.v4/plumbing"
 	"gopkg.in/src-d/go-git.v4/utils/ioutil"
 
@@ -213,11 +215,7 @@ func (d *DotGit) DeleteOldObjectPackAndIndex(hash plumbing.Hash, t time.Time) er
 	if err != nil {
 		return err
 	}
-	err = d.fs.Remove(d.objectPackPath(hash, `idx`))
-	if err != nil {
-		return err
-	}
-	return nil
+	return d.fs.Remove(d.objectPackPath(hash, `idx`))
 }
 
 // NewObject return a writer for a new object file.
@@ -340,36 +338,9 @@ func (d *DotGit) SetRef(r, old *plumbing.Reference) (err error) {
 		content = fmt.Sprintln(r.Hash().String())
 	}
 
-	// If we are not checking an old ref, just truncate the file.
-	mode := os.O_RDWR | os.O_CREATE
-	if old == nil {
-		mode |= os.O_TRUNC
-	}
+	fileName := r.Name().String()
 
-	f, err := d.fs.OpenFile(r.Name().String(), mode, 0666)
-	if err != nil {
-		return err
-	}
-
-	defer ioutil.CheckClose(f, &err)
-
-	// Lock is unlocked by the deferred Close above. This is because Unlock
-	// does not imply a fsync and thus there would be a race between
-	// Unlock+Close and other concurrent writers. Adding Sync to go-billy
-	// could work, but this is better (and avoids superfluous syncs).
-	err = f.Lock()
-	if err != nil {
-		return err
-	}
-
-	// this is a no-op to call even when old is nil.
-	err = d.checkReferenceAndTruncate(f, old)
-	if err != nil {
-		return err
-	}
-
-	_, err = f.Write([]byte(content))
-	return err
+	return d.setRef(fileName, content, old)
 }
 
 // Refs scans the git directory collecting references, which it returns.
@@ -419,7 +390,7 @@ func (d *DotGit) findPackedRefsInFile(f billy.File) ([]*plumbing.Reference, erro
 	return refs, s.Err()
 }
 
-func (d *DotGit) findPackedRefs() ([]*plumbing.Reference, error) {
+func (d *DotGit) findPackedRefs() (r []*plumbing.Reference, err error) {
 	f, err := d.fs.Open(packedRefsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -502,7 +473,10 @@ func (d *DotGit) openAndLockPackedRefs(doCreate bool) (
 		}
 	}()
 
-	openFlags := os.O_RDWR
+	// File mode is retrieved from a constant defined in the target specific
+	// files (dotgit_rewrite_packed_refs_*). Some modes are not available
+	// in all filesystems.
+	openFlags := d.openAndLockPackedRefsMode()
 	if doCreate {
 		openFlags |= os.O_CREATE
 	}
@@ -533,7 +507,7 @@ func (d *DotGit) openAndLockPackedRefs(doCreate bool) (
 		if err != nil {
 			return nil, err
 		}
-		if mtime == fi.ModTime() {
+		if mtime.Equal(fi.ModTime()) {
 			break
 		}
 		// The file has changed since we opened it.  Close and retry.
@@ -757,7 +731,7 @@ func (d *DotGit) PackRefs() (err error) {
 	// Gather all refs using addRefsFromRefDir and addRefsFromPackedRefs.
 	var refs []*plumbing.Reference
 	seen := make(map[plumbing.ReferenceName]bool)
-	if err := d.addRefsFromRefDir(&refs, seen); err != nil {
+	if err = d.addRefsFromRefDir(&refs, seen); err != nil {
 		return err
 	}
 	if len(refs) == 0 {
@@ -765,7 +739,7 @@ func (d *DotGit) PackRefs() (err error) {
 		return nil
 	}
 	numLooseRefs := len(refs)
-	if err := d.addRefsFromPackedRefsFile(&refs, f, seen); err != nil {
+	if err = d.addRefsFromPackedRefsFile(&refs, f, seen); err != nil {
 		return err
 	}
 
@@ -782,7 +756,7 @@ func (d *DotGit) PackRefs() (err error) {
 
 	w := bufio.NewWriter(tmp)
 	for _, ref := range refs {
-		_, err := w.WriteString(ref.String() + "\n")
+		_, err = w.WriteString(ref.String() + "\n")
 		if err != nil {
 			return err
 		}
@@ -811,9 +785,55 @@ func (d *DotGit) PackRefs() (err error) {
 	return nil
 }
 
-// Module return a billy.Filesystem poiting to the module folder
+// Module return a billy.Filesystem pointing to the module folder
 func (d *DotGit) Module(name string) (billy.Filesystem, error) {
 	return d.fs.Chroot(d.fs.Join(modulePath, name))
+}
+
+// Alternates returns DotGit(s) based off paths in objects/info/alternates if
+// available. This can be used to checks if it's a shared repository.
+func (d *DotGit) Alternates() ([]*DotGit, error) {
+	altpath := d.fs.Join("objects", "info", "alternates")
+	f, err := d.fs.Open(altpath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var alternates []*DotGit
+
+	// Read alternate paths line-by-line and create DotGit objects.
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		path := scanner.Text()
+		if !filepath.IsAbs(path) {
+			// For relative paths, we can perform an internal conversion to
+			// slash so that they work cross-platform.
+			slashPath := filepath.ToSlash(path)
+			// If the path is not absolute, it must be relative to object
+			// database (.git/objects/info).
+			// https://www.kernel.org/pub/software/scm/git/docs/gitrepository-layout.html
+			// Hence, derive a path relative to DotGit's root.
+			// "../../../reponame/.git/" -> "../../reponame/.git"
+			// Remove the first ../
+			relpath := filepath.Join(strings.Split(slashPath, "/")[1:]...)
+			normalPath := filepath.FromSlash(relpath)
+			path = filepath.Join(d.fs.Root(), normalPath)
+		}
+		fs := osfs.New(filepath.Dir(path))
+		alternates = append(alternates, New(fs))
+	}
+
+	if err = scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return alternates, nil
+}
+
+// Fs returns the underlying filesystem of the DotGit folder.
+func (d *DotGit) Fs() billy.Filesystem {
+	return d.fs
 }
 
 func isHex(s string) bool {
@@ -838,5 +858,3 @@ func isNum(b byte) bool {
 func isHexAlpha(b byte) bool {
 	return b >= 'a' && b <= 'f' || b >= 'A' && b <= 'F'
 }
-
-type refCache map[plumbing.ReferenceName]*plumbing.Reference

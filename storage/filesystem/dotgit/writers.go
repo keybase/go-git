@@ -20,13 +20,14 @@ import (
 // is renamed/moved (depends on the Filesystem implementation) to the final
 // location, if the PackWriter is not used, nothing is written
 type PackWriter struct {
-	Notify func(plumbing.Hash, *packfile.Index)
+	Notify func(plumbing.Hash, *idxfile.Writer)
 
 	fs         billy.Filesystem
 	fr, fw     billy.File
 	synced     *syncedReader
 	checksum   plumbing.Hash
-	index      *packfile.Index
+	parser     *packfile.Parser
+	writer     *idxfile.Writer
 	result     chan error
 	statusChan plumbing.StatusChan
 }
@@ -57,20 +58,21 @@ func newPackWrite(fs billy.Filesystem, statusChan plumbing.StatusChan) (*PackWri
 
 func (w *PackWriter) buildIndex() {
 	s := packfile.NewScanner(w.synced)
-	d, err := packfile.NewDecoder(s, nil)
+	w.writer = new(idxfile.Writer)
+	var err error
+	w.parser, err = packfile.NewParser(s, w.writer)
 	if err != nil {
 		w.result <- err
 		return
 	}
 
-	checksum, err := d.Decode(w.statusChan)
+	checksum, err := w.parser.Parse()
 	if err != nil {
 		w.result <- err
 		return
 	}
 
 	w.checksum = checksum
-	w.index = d.Index()
 	w.result <- err
 }
 
@@ -94,8 +96,8 @@ func (w *PackWriter) Write(p []byte) (int, error) {
 // was written, the tempfiles are deleted without writing a packfile.
 func (w *PackWriter) Close() error {
 	defer func() {
-		if w.Notify != nil && w.index != nil && w.index.Size() > 0 {
-			w.Notify(w.checksum, w.index)
+		if w.Notify != nil && w.writer != nil && w.writer.Finished() {
+			w.Notify(w.checksum, w.writer)
 		}
 
 		close(w.result)
@@ -117,7 +119,7 @@ func (w *PackWriter) Close() error {
 		return err
 	}
 
-	if w.index == nil || w.index.Size() == 0 {
+	if w.writer == nil || !w.writer.Finished() {
 		return w.clean()
 	}
 
@@ -147,11 +149,13 @@ func (w *PackWriter) save() error {
 }
 
 func (w *PackWriter) encodeIdx(writer io.Writer) error {
-	idx := w.index.ToIdxFile()
-	idx.PackfileChecksum = w.checksum
-	idx.Version = idxfile.VersionSupported
+	idx, err := w.writer.Index()
+	if err != nil {
+		return err
+	}
+
 	e := idxfile.NewEncoder(writer)
-	_, err := e.Encode(idx, w.statusChan)
+	_, err = e.Encode(idx, w.statusChan)
 	return err
 }
 
@@ -211,7 +215,6 @@ func (s *syncedReader) isBlocked() bool {
 
 func (s *syncedReader) wake() {
 	if s.isBlocked() {
-		//	fmt.Println("wake")
 		atomic.StoreUint32(&s.blocked, 0)
 		s.news <- true
 	}
@@ -222,7 +225,6 @@ func (s *syncedReader) sleep() {
 	written := atomic.LoadUint64(&s.written)
 	if read >= written {
 		atomic.StoreUint32(&s.blocked, 1)
-		//	fmt.Println("sleep", read, written)
 		<-s.news
 	}
 

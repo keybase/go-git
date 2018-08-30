@@ -45,7 +45,7 @@ is supported by go-git.
 | **debugging** |
 | bisect                                | ✖ |
 | blame                                 | ✔ |
-| grep                                  | ✖ |
+| grep                                  | ✔ |
 | **email** ||
 | am                                    | ✖ |
 | apply                                 | ✖ |
@@ -56,7 +56,7 @@ is supported by go-git.
 | svn                                   | ✖ |
 | fast-import                           | ✖ |
 | **administration** |
-| clean                                 | ✖ |
+| clean                                 | ✔ |
 | gc                                    | ✖ |
 | fsck                                  | ✖ |
 | reflog                                | ✖ |

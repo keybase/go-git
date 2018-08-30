@@ -15,6 +15,7 @@ var examplesTest = flag.Bool("examples", false, "run the examples tests")
 var defaultURL = "https://github.com/git-fixtures/basic.git"
 
 var args = map[string][]string{
+	"branch":      {defaultURL, tempFolder()},
 	"checkout":    {defaultURL, tempFolder(), "35e85108805c84807bc66a02d91535e1e24b38b9"},
 	"clone":       {defaultURL, tempFolder()},
 	"context":     {defaultURL, tempFolder()},
@@ -23,6 +24,7 @@ var args = map[string][]string{
 	"open":        {cloneRepository(defaultURL, tempFolder())},
 	"progress":    {defaultURL, tempFolder()},
 	"push":        {setEmptyRemote(cloneRepository(defaultURL, tempFolder()))},
+	"revision":    {cloneRepository(defaultURL, tempFolder()), "master~2^"},
 	"showcase":    {defaultURL, tempFolder()},
 	"tag":         {cloneRepository(defaultURL, tempFolder())},
 	"pull":        {createRepositoryWithRemote(tempFolder(), defaultURL)},
