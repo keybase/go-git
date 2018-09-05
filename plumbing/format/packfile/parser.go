@@ -59,6 +59,7 @@ func (so *StatusObserver) OnInflatedObjectContent(plumbing.Hash, int64, uint32, 
 	return nil
 }
 func (so *StatusObserver) OnFooter(plumbing.Hash) error {
+	so.statusChan.SendUpdate(so.update)
 	return nil
 }
 
