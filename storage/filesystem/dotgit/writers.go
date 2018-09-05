@@ -60,7 +60,7 @@ func (w *PackWriter) buildIndex() {
 	s := packfile.NewScanner(w.synced)
 	w.writer = new(idxfile.Writer)
 	var err error
-	w.parser, err = packfile.NewParser(s, w.writer)
+	w.parser, err = packfile.NewParser(s, w.writer, packfile.NewStatusObserver(w.statusChan))
 	if err != nil {
 		w.result <- err
 		return

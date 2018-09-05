@@ -31,7 +31,7 @@ func UpdateObjectStorage(s storer.Storer, packfile io.Reader, statusChan plumbin
 		return WritePackfileToObjectStorage(pw, packfile, statusChan)
 	}
 
-	p, err := NewParserWithStorage(NewScanner(packfile), s)
+	p, err := NewParserWithStorage(NewScanner(packfile), s, NewStatusObserver(statusChan))
 	if err != nil {
 		return err
 	}
