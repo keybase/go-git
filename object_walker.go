@@ -22,6 +22,7 @@ func newObjectWalker(s storage.Storer) *objectWalker {
 }
 
 // walkAllRefs walks all (hash) refererences from the repo.
+// This includes both branches and tags.
 func (p *objectWalker) walkAllRefs() error {
 	// Walk over all the references in the repo.
 	it, err := p.Storer.IterReferences()
@@ -51,6 +52,9 @@ func (p *objectWalker) add(hash plumbing.Hash) {
 // walkObjectTree walks over all objects and remembers references
 // to them in the objectWalker. This is used instead of the revlist
 // walks because memory usage is tight with huge repos.
+// The code does not handle tags because tags are encountered by
+// the top-level walkAllRefs, and nothing below them should
+// link to a tag object.
 func (p *objectWalker) walkObjectTree(hash plumbing.Hash) error {
 	// Check if we have already seen, and mark this object
 	if p.isSeen(hash) {
