@@ -94,6 +94,11 @@ func (p *objectWalker) walkObjectTree(hash plumbing.Hash) error {
 				return err
 			}
 		}
+	// Blobs are nops for the recursive part.
+	// They don't contain any references to more objects to look for,
+	// and the hash for the current object got added to the set of visited object
+	// in the common code above.
+	case *object.Blob:
 	default:
 		// Error out on unhandled object types.
 		return fmt.Errorf("Unknown object %X %s %T\n", obj.ID(), obj.Type(), obj)
