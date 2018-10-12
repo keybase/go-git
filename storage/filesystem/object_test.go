@@ -74,6 +74,21 @@ func (s *FsSuite) TestGetSizeFromPackfile(c *C) {
 	})
 }
 
+func (s *FsSuite) TestGetSizeOfAllObjectFiles(c *C) {
+	fs := fixtures.ByTag(".git").One().DotGit()
+	o, err := NewObjectStorage(dotgit.New(fs))
+	c.Assert(err, IsNil)
+
+	// Get the size of `tree_walker.go`.
+	err = o.ForEachObjectHash(func(h plumbing.Hash) error {
+		size, err := o.EncodedObjectSize(h)
+		c.Assert(err, IsNil)
+		c.Assert(size, Not(Equals), int64(0))
+		return nil
+	})
+	c.Assert(err, IsNil)
+}
+
 func (s *FsSuite) TestGetFromPackfileMultiplePackfiles(c *C) {
 	fs := fixtures.ByTag(".git").ByTag("multi-packfile").One().DotGit()
 	o, err := NewObjectStorage(dotgit.New(fs))
