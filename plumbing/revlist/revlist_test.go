@@ -248,9 +248,6 @@ func (s *RevListSuite) TestReachableObjectsNoRevisit(c *C) {
 		map[plumbing.Hash]bool{
 			plumbing.NewHash("35e85108805c84807bc66a02d91535e1e24b38b9"): true,
 		},
-		map[plumbing.Hash]bool{
-			plumbing.NewHash("35e85108805c84807bc66a02d91535e1e24b38b9"): true,
-		},
 		nil,
 		func(h plumbing.Hash) {
 			obj, err := s.Storer.EncodedObject(plumbing.AnyObject, h)
