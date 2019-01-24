@@ -3,8 +3,7 @@
 package dotgit
 
 import (
-	"io"
-	stdioutil "io/ioutil"
+	"fmt"
 	"os"
 
 	"gopkg.in/src-d/go-git.v4/plumbing"
@@ -23,11 +22,13 @@ func (d *DotGit) setRef(fileName, content string, old *plumbing.Reference) (err 
 		return err
 	}
 
-	var originalContents []byte
 	defer func() {
 		realErr := err
 		ioutil.CheckClose(f, &err)
 		if err == nil {
+			// `CheckClose` doesn't override `err` if the `Close`
+			// succeeds, so we don't have to worry about setting `err`
+			// back to `realErr` in that case.
 			return
 		}
 		if old != nil && realErr != nil {
@@ -44,33 +45,33 @@ func (d *DotGit) setRef(fileName, content string, old *plumbing.Reference) (err 
 		// possibly-corrupted state.  (Explicitly ignore errors below
 		// since we don't want to overwrite the real `err` being
 		// returned.)
-		if len(originalContents) == 0 {
+		if old == nil {
 			_ = d.fs.Remove(fileName)
-		} else {
-			// If the file didn't start out empty, it's a bit risky to
-			// overwrite it here without holding the lock.  But
-			// because we can only get down here if it's an error
-			// trying to close/unlock the file, it seems safe to
-			// overwrite the file again (which in most storage layers
-			// would just revert the local copy of the file to what it
-			// was before the failure).  TODO: explicitly require the
-			// storage layer to throw out changes when the unlock
-			// fails?
-			f, openErr := d.fs.OpenFile(fileName, os.O_RDWR|os.O_TRUNC, 0666)
-			if openErr != nil {
-				return
-			}
-			total := 0
-			for total < len(originalContents) {
-				n, writeErr := f.Write(originalContents[total:])
-				if writeErr != nil {
-					_ = f.Close()
-					return
-				}
-				total += n
-			}
-			_ = f.Close()
+			return
 		}
+
+		// If the file didn't start out empty, it's a bit risky to
+		// overwrite it here without holding the lock.  But because we
+		// can only get down here if it's an error trying to
+		// close/unlock the file, it seems safe to overwrite the file
+		// again (which in most storage layers would just revert the
+		// local copy of the file to what it was before the failure).
+		// TODO: explicitly require the storage layer to throw out
+		// changes when the unlock fails?
+		var oldContent string
+		switch old.Type() {
+		case plumbing.SymbolicReference:
+			oldContent = fmt.Sprintf("ref: %s\n", old.Target())
+		case plumbing.HashReference:
+			oldContent = fmt.Sprintln(old.Hash().String())
+		}
+
+		f, openErr := d.fs.OpenFile(fileName, os.O_RDWR|os.O_TRUNC, 0666)
+		if openErr != nil {
+			return
+		}
+		_, _ = f.Write([]byte(oldContent))
+		_ = f.Close()
 	}()
 
 	// Lock is unlocked by the deferred Close above. This is because Unlock
@@ -78,15 +79,6 @@ func (d *DotGit) setRef(fileName, content string, old *plumbing.Reference) (err 
 	// Unlock+Close and other concurrent writers. Adding Sync to go-billy
 	// could work, but this is better (and avoids superfluous syncs).
 	err = f.Lock()
-	if err != nil {
-		return err
-	}
-
-	originalContents, err = stdioutil.ReadAll(f)
-	if err != nil {
-		return err
-	}
-	_, err = f.Seek(0, io.SeekStart)
 	if err != nil {
 		return err
 	}
