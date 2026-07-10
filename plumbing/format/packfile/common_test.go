@@ -20,7 +20,7 @@ func (s *CommonSuite) TestEmptyUpdateObjectStorage(c *C) {
 	var buf bytes.Buffer
 	sto := memory.NewStorage()
 
-	err := UpdateObjectStorage(sto, &buf)
+	err := UpdateObjectStorage(sto, &buf, nil)
 	c.Assert(err, Equals, ErrEmptyPackfile)
 }
 

@@ -153,7 +153,7 @@ func (s *BaseStorageSuite) TestPackfileWriter(c *C) {
 		c.Skip("not a storer.PackWriter")
 	}
 
-	pw, err := pwr.PackfileWriter()
+	pw, err := pwr.PackfileWriter(nil)
 	c.Assert(err, IsNil)
 
 	f := fixtures.Basic().One()
@@ -172,6 +172,51 @@ func (s *BaseStorageSuite) TestPackfileWriter(c *C) {
 	})
 	c.Assert(err, IsNil)
 	c.Assert(objects, Equals, 31)
+}
+
+func (s *BaseStorageSuite) TestPackfileWriterStatusChan(c *C) {
+	pwr, ok := s.Storer.(storer.PackfileWriter)
+	if !ok {
+		c.Skip("not a storer.PackWriter")
+	}
+
+	ch := make(chan plumbing.StatusUpdate, 32)
+	var sc plumbing.StatusChan = ch
+
+	// Drain concurrently, mirroring the KBFS consumer pattern (unbuffered/small
+	// channel + goroutine). Close() calls encodeIdx synchronously, which sends
+	// ~96 additional updates on top of the StatusObserver's ~33, so sequential
+	// drain-after-close deadlocks on any fixed-size buffer.
+	var lastFetch plumbing.StatusUpdate
+	gotFetch := false
+	drainDone := make(chan struct{})
+	go func() {
+		defer close(drainDone)
+		for u := range ch {
+			if u.Stage == plumbing.StatusFetch {
+				gotFetch = true
+				lastFetch = u
+			}
+		}
+	}()
+
+	pw, err := pwr.PackfileWriter(sc)
+	c.Assert(err, IsNil)
+
+	f := fixtures.Basic().One()
+	_, err = io.Copy(pw, f.Packfile())
+	c.Assert(err, IsNil)
+
+	err = pw.Close()
+	c.Assert(err, IsNil)
+	close(ch)
+	<-drainDone
+
+	c.Assert(gotFetch, Equals, true)
+	// The basic fixture has 31 objects; OnHeader sets ObjectsTotal from the
+	// pack header, so this must match.
+	c.Assert(lastFetch.ObjectsTotal, Equals, 31)
+	c.Assert(lastFetch.ObjectsDone, Equals, 31)
 }
 
 func (s *BaseStorageSuite) TestObjectStorerTxSetEncodedObjectAndCommit(c *C) {
@@ -463,7 +508,7 @@ func (s *BaseStorageSuite) TestDeltaObjectStorer(c *C) {
 		c.Skip("not a storer.PackWriter")
 	}
 
-	pw, err := pwr.PackfileWriter()
+	pw, err := pwr.PackfileWriter(nil)
 	c.Assert(err, IsNil)
 
 	f := fixtures.Basic().One()

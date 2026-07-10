@@ -192,7 +192,7 @@ func (s *ParserSuite) TestThinPack(c *C) {
 
 	// Now unpack a base packfile into our empty repo:
 	f := fixtures.ByURL("https://github.com/spinnaker/spinnaker.git").One()
-	w, err := r.Storer.(storer.PackfileWriter).PackfileWriter()
+	w, err := r.Storer.(storer.PackfileWriter).PackfileWriter(nil)
 	c.Assert(err, IsNil)
 	_, err = io.Copy(w, f.Packfile())
 	c.Assert(err, IsNil)

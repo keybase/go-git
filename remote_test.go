@@ -404,9 +404,9 @@ type mockPackfileWriter struct {
 	PackfileWriterCalled bool
 }
 
-func (m *mockPackfileWriter) PackfileWriter() (io.WriteCloser, error) {
+func (m *mockPackfileWriter) PackfileWriter(statusChan plumbing.StatusChan) (io.WriteCloser, error) {
 	m.PackfileWriterCalled = true
-	return m.Storer.(storer.PackfileWriter).PackfileWriter()
+	return m.Storer.(storer.PackfileWriter).PackfileWriter(statusChan)
 }
 
 func (s *RemoteSuite) TestFetchWithPackfileWriter(c *C) {

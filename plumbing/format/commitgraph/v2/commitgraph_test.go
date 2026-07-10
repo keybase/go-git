@@ -89,7 +89,7 @@ func (s *CommitgraphSuite) TestDecodeMultiChain(c *C) {
 		storer := filesystem.NewStorage(f.DotGit(), cache.NewObjectLRUDefault())
 		p := f.Packfile()
 		defer p.Close()
-		packfile.UpdateObjectStorage(storer, p)
+		packfile.UpdateObjectStorage(storer, p, nil)
 
 		for idx, hash := range index.Hashes() {
 			idx2, err := index.GetIndexByHash(hash)

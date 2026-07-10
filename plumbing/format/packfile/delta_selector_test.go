@@ -1,6 +1,8 @@
 package packfile
 
 import (
+	"sync"
+
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/storage/memory"
 
@@ -147,7 +149,7 @@ func (s *DeltaSelectorSuite) TestObjectsToPack(c *C) {
 	// Different type
 	hashes := []plumbing.Hash{s.hashes["base"], s.hashes["treeType"]}
 	deltaWindowSize := uint(10)
-	otp, err := s.ds.ObjectsToPack(hashes, deltaWindowSize)
+	otp, err := s.ds.ObjectsToPack(hashes, deltaWindowSize, nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(otp), Equals, 2)
 	c.Assert(otp[0].Object, Equals, s.store.Objects[s.hashes["base"]])
@@ -155,7 +157,7 @@ func (s *DeltaSelectorSuite) TestObjectsToPack(c *C) {
 
 	// Size radically different
 	hashes = []plumbing.Hash{s.hashes["bigBase"], s.hashes["target"]}
-	otp, err = s.ds.ObjectsToPack(hashes, deltaWindowSize)
+	otp, err = s.ds.ObjectsToPack(hashes, deltaWindowSize, nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(otp), Equals, 2)
 	c.Assert(otp[0].Object, Equals, s.store.Objects[s.hashes["bigBase"]])
@@ -163,7 +165,7 @@ func (s *DeltaSelectorSuite) TestObjectsToPack(c *C) {
 
 	// Delta Size Limit with no best delta yet
 	hashes = []plumbing.Hash{s.hashes["smallBase"], s.hashes["smallTarget"]}
-	otp, err = s.ds.ObjectsToPack(hashes, deltaWindowSize)
+	otp, err = s.ds.ObjectsToPack(hashes, deltaWindowSize, nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(otp), Equals, 2)
 	c.Assert(otp[0].Object, Equals, s.store.Objects[s.hashes["smallBase"]])
@@ -171,7 +173,7 @@ func (s *DeltaSelectorSuite) TestObjectsToPack(c *C) {
 
 	// It will create the delta
 	hashes = []plumbing.Hash{s.hashes["base"], s.hashes["target"]}
-	otp, err = s.ds.ObjectsToPack(hashes, deltaWindowSize)
+	otp, err = s.ds.ObjectsToPack(hashes, deltaWindowSize, nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(otp), Equals, 2)
 	c.Assert(otp[0].Object, Equals, s.store.Objects[s.hashes["target"]])
@@ -186,7 +188,7 @@ func (s *DeltaSelectorSuite) TestObjectsToPack(c *C) {
 		s.hashes["o2"],
 		s.hashes["o3"],
 	}
-	otp, err = s.ds.ObjectsToPack(hashes, deltaWindowSize)
+	otp, err = s.ds.ObjectsToPack(hashes, deltaWindowSize, nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(otp), Equals, 3)
 	c.Assert(otp[0].Object, Equals, s.store.Objects[s.hashes["o1"]])
@@ -209,9 +211,11 @@ func (s *DeltaSelectorSuite) TestObjectsToPack(c *C) {
 
 	// Don't sort so we can easily check the sliding window without
 	// creating a bunch of new objects.
-	otp, err = s.ds.objectsToPack(hashes, deltaWindowSize)
+	otp, err = s.ds.objectsToPack(hashes, deltaWindowSize, nil, plumbing.StatusUpdate{})
 	c.Assert(err, IsNil)
-	err = s.ds.walk(otp, deltaWindowSize)
+	walkUpdate := plumbing.StatusUpdate{}
+	var walkMu sync.Mutex
+	err = s.ds.walk(otp, deltaWindowSize, nil, &walkUpdate, &walkMu)
 	c.Assert(err, IsNil)
 	c.Assert(len(otp), Equals, int(deltaWindowSize)+2)
 	targetIdx := len(otp) - 1
@@ -220,7 +224,7 @@ func (s *DeltaSelectorSuite) TestObjectsToPack(c *C) {
 	// Check that no deltas are created, and the objects are unsorted,
 	// if compression is off.
 	hashes = []plumbing.Hash{s.hashes["base"], s.hashes["target"]}
-	otp, err = s.ds.ObjectsToPack(hashes, 0)
+	otp, err = s.ds.ObjectsToPack(hashes, 0, nil)
 	c.Assert(err, IsNil)
 	c.Assert(len(otp), Equals, 2)
 	c.Assert(otp[0].Object, Equals, s.store.Objects[s.hashes["base"]])
@@ -233,4 +237,23 @@ func (s *DeltaSelectorSuite) TestObjectsToPack(c *C) {
 func (s *DeltaSelectorSuite) TestMaxDepth(c *C) {
 	dsl := s.ds.deltaSizeLimit(0, 0, int(maxDepth), true)
 	c.Assert(dsl, Equals, int64(0))
+}
+
+func (s *DeltaSelectorSuite) TestObjectsToPackStatusChan(c *C) {
+	hashes := []plumbing.Hash{s.hashes["base"], s.hashes["target"]}
+	ch := make(chan plumbing.StatusUpdate, 50)
+	var sc plumbing.StatusChan = ch
+
+	_, err := s.ds.ObjectsToPack(hashes, 10, sc)
+	c.Assert(err, IsNil)
+	close(ch)
+
+	stages := make(map[plumbing.StatusStage]bool)
+	for u := range ch {
+		stages[u.Stage] = true
+	}
+	c.Assert(stages[plumbing.StatusRead], Equals, true)
+	c.Assert(stages[plumbing.StatusFixChains], Equals, true)
+	c.Assert(stages[plumbing.StatusSort], Equals, true)
+	c.Assert(stages[plumbing.StatusDelta], Equals, true)
 }

@@ -80,7 +80,7 @@ func (s *EncoderAdvancedSuite) testEncodeDecode(
 
 	buf := bytes.NewBuffer(nil)
 	enc := NewEncoder(buf, storage, false)
-	encodeHash, err := enc.Encode(hashes, packWindow)
+	encodeHash, err := enc.Encode(hashes, packWindow, nil)
 	c.Assert(err, IsNil)
 
 	fs := memfs.New()

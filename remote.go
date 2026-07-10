@@ -201,9 +201,9 @@ func (r *Remote) PushContext(ctx context.Context, o *PushOptions) (err error) {
 			localStorer := filesystem.NewStorage(
 				osfs.New(o.RemoteURL), cache.NewObjectLRUDefault())
 			hashesToPush, err = revlist.ObjectsWithStorageForIgnores(
-				r.s, localStorer, objects, haves)
+				r.s, localStorer, objects, haves, o.StatusChan)
 		} else {
-			hashesToPush, err = revlist.Objects(r.s, objects, haves)
+			hashesToPush, err = revlist.Objects(r.s, objects, haves, o.StatusChan)
 		}
 		if err != nil {
 			return err
@@ -220,7 +220,7 @@ func (r *Remote) PushContext(ctx context.Context, o *PushOptions) (err error) {
 		}
 	}
 
-	rs, err := pushHashes(ctx, s, r.s, req, hashesToPush, r.useRefDeltas(ar), allDelete)
+	rs, err := pushHashes(ctx, s, r.s, req, hashesToPush, r.useRefDeltas(ar), allDelete, o.StatusChan)
 	if err != nil {
 		return err
 	}
@@ -589,6 +589,7 @@ func (r *Remote) fetchPack(ctx context.Context, o *FetchOptions, s transport.Upl
 
 	if err = packfile.UpdateObjectStorage(r.s,
 		buildSidebandIfSupported(req.Capabilities, reader, o.Progress),
+		o.StatusChan,
 	); err != nil {
 		return err
 	}
@@ -1441,6 +1442,7 @@ func pushHashes(
 	hs []plumbing.Hash,
 	useRefDeltas bool,
 	allDelete bool,
+	statusChan plumbing.StatusChan,
 ) (*packp.ReportStatus, error) {
 	rd, wr := io.Pipe()
 
@@ -1458,7 +1460,7 @@ func pushHashes(
 		req.Packfile = rd
 		go func() {
 			e := packfile.NewEncoder(wr, s, useRefDeltas)
-			if _, err := e.Encode(hs, config.Pack.Window); err != nil {
+			if _, err := e.Encode(hs, config.Pack.Window, statusChan); err != nil {
 				done <- wr.CloseWithError(err)
 				return
 			}

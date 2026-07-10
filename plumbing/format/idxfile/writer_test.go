@@ -40,7 +40,7 @@ func (s *WriterSuite) TestWriter(c *C) {
 
 	buf := new(bytes.Buffer)
 	encoder := idxfile.NewEncoder(buf)
-	n, err := encoder.Encode(idx)
+	n, err := encoder.Encode(idx, nil)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, len(expected))
 
@@ -70,7 +70,7 @@ func (s *WriterSuite) TestWriterLarge(c *C) {
 
 	buf := new(bytes.Buffer)
 	encoder := idxfile.NewEncoder(buf)
-	n, err := encoder.Encode(idx)
+	n, err := encoder.Encode(idx, nil)
 	c.Assert(err, IsNil)
 	c.Assert(n, Equals, len(expected))
 

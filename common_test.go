@@ -109,7 +109,7 @@ func (s *BaseSuite) NewRepositoryFromPackfile(f *fixtures.Fixture) *Repository {
 	p := f.Packfile()
 	defer func() { _ = p.Close() }()
 
-	if err := packfile.UpdateObjectStorage(storer, p); err != nil {
+	if err := packfile.UpdateObjectStorage(storer, p, nil); err != nil {
 		panic(err)
 	}
 

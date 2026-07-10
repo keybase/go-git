@@ -28,7 +28,7 @@ func (s *SuiteDotGit) TestNewObjectPack(c *C) {
 
 	dot := New(fs)
 
-	w, err := dot.NewObjectPack()
+	w, err := dot.NewObjectPack(nil)
 	c.Assert(err, IsNil)
 
 	_, err = io.Copy(w, f.Packfile())
@@ -67,7 +67,7 @@ func (s *SuiteDotGit) TestNewObjectPackUnused(c *C) {
 
 	dot := New(fs)
 
-	w, err := dot.NewObjectPack()
+	w, err := dot.NewObjectPack(nil)
 	c.Assert(err, IsNil)
 
 	c.Assert(w.Close(), IsNil)
@@ -131,7 +131,7 @@ func (s *SuiteDotGit) TestSyncedReader(c *C) {
 func (s *SuiteDotGit) TestPackWriterUnusedNotify(c *C) {
 	fs := s.TemporalFilesystem(c)
 
-	w, err := newPackWrite(fs)
+	w, err := newPackWrite(fs, nil)
 	c.Assert(err, IsNil)
 
 	w.Notify = func(h plumbing.Hash, idx *idxfile.Writer) {
@@ -159,7 +159,7 @@ func TestPackWriterPermissions(t *testing.T) {
 			dot := New(tc.fs)
 			require.NoError(t, dot.Initialize())
 
-			w, err := dot.NewObjectPack()
+			w, err := dot.NewObjectPack(nil)
 			require.NoError(t, err)
 
 			_, err = io.Copy(w, f.Packfile())
@@ -204,7 +204,7 @@ func TestPackWriterExistingReadOnly(t *testing.T) {
 
 			writePack := func() {
 				t.Helper()
-				w, err := dot.NewObjectPack()
+				w, err := dot.NewObjectPack(nil)
 				require.NoError(t, err)
 
 				_, err = io.Copy(w, f.Packfile())
@@ -257,7 +257,7 @@ func TestPackWriterRejectsNonRegularFile(t *testing.T) {
 				fmt.Sprintf("pack-%s%s", f.PackfileHash, ext))
 			require.NoError(t, fs.MkdirAll(path, 0o755))
 
-			w, err := dot.NewObjectPack()
+			w, err := dot.NewObjectPack(nil)
 			require.NoError(t, err)
 
 			_, err = io.Copy(w, f.Packfile())

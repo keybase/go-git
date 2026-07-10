@@ -77,6 +77,41 @@ type Observer interface {
 	OnFooter(h plumbing.Hash) error
 }
 
+// StatusObserver implements Observer and forwards packfile progress to a
+// plumbing.StatusChan.
+type StatusObserver struct {
+	statusChan plumbing.StatusChan
+	update     plumbing.StatusUpdate
+}
+
+// NewStatusObserver returns a StatusObserver that sends progress to sc.
+// If sc is nil, all method calls are no-ops.
+func NewStatusObserver(sc plumbing.StatusChan) *StatusObserver {
+	return &StatusObserver{statusChan: sc}
+}
+
+func (so *StatusObserver) OnHeader(count uint32) error {
+	so.update.Stage = plumbing.StatusFetch
+	so.update.ObjectsTotal = int(count)
+	so.statusChan.SendUpdate(so.update)
+	return nil
+}
+
+func (so *StatusObserver) OnInflatedObjectHeader(t plumbing.ObjectType, objSize int64, pos int64) error {
+	so.statusChan.SendUpdate(so.update)
+	so.update.ObjectsDone++
+	return nil
+}
+
+func (so *StatusObserver) OnInflatedObjectContent(plumbing.Hash, int64, uint32, []byte) error {
+	return nil
+}
+
+func (so *StatusObserver) OnFooter(plumbing.Hash) error {
+	so.statusChan.SendUpdate(so.update)
+	return nil
+}
+
 // Parser decodes a packfile and calls any observer associated to it. Is used
 // to generate indexes.
 type Parser struct {

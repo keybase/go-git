@@ -3,6 +3,7 @@ package transactional
 import (
 	"io"
 
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/storage"
 )
@@ -95,6 +96,6 @@ func (s *basic) Commit() error {
 }
 
 // PackfileWriter honors storage.PackfileWriter.
-func (s *packageWriter) PackfileWriter() (io.WriteCloser, error) {
-	return s.pw.PackfileWriter()
+func (s *packageWriter) PackfileWriter(statusChan plumbing.StatusChan) (io.WriteCloser, error) {
+	return s.pw.PackfileWriter(statusChan)
 }

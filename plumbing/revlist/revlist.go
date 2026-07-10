@@ -20,8 +20,9 @@ func Objects(
 	s storer.EncodedObjectStorer,
 	objs,
 	ignore []plumbing.Hash,
+	statusChan plumbing.StatusChan,
 ) ([]plumbing.Hash, error) {
-	return ObjectsWithStorageForIgnores(s, s, objs, ignore)
+	return ObjectsWithStorageForIgnores(s, s, objs, ignore, statusChan)
 }
 
 // ObjectsWithStorageForIgnores is the same as Objects, but a
@@ -33,29 +34,36 @@ func ObjectsWithStorageForIgnores(
 	s, ignoreStore storer.EncodedObjectStorer,
 	objs,
 	ignore []plumbing.Hash,
+	statusChan plumbing.StatusChan,
 ) ([]plumbing.Hash, error) {
-	ignore, err := objects(ignoreStore, ignore, nil, true)
+	ignore, err := objects(ignoreStore, ignore, nil, nil, true)
 	if err != nil {
 		return nil, err
 	}
 
-	return objects(s, objs, ignore, false)
+	return objects(s, objs, ignore, statusChan, false)
 }
 
 func objects(
 	s storer.EncodedObjectStorer,
 	objects,
 	ignore []plumbing.Hash,
+	statusChan plumbing.StatusChan,
 	allowMissingObjects bool,
 ) ([]plumbing.Hash, error) {
 	seen := hashListToSet(ignore)
 	result := make(map[plumbing.Hash]bool)
 	visited := make(map[plumbing.Hash]bool)
 
+	update := plumbing.StatusUpdate{Stage: plumbing.StatusCount}
+	statusChan.SendUpdate(update)
+
 	walkerFunc := func(h plumbing.Hash) {
 		if !seen[h] {
 			result[h] = true
 			seen[h] = true
+			update.ObjectsTotal++
+			statusChan.SendUpdateIfPossible(update)
 		}
 	}
 
@@ -69,7 +77,10 @@ func objects(
 		}
 	}
 
-	return hashSetToList(result), nil
+	hashes := hashSetToList(result)
+	update.ObjectsTotal = len(hashes)
+	statusChan.SendUpdate(update)
+	return hashes, nil
 }
 
 // processObject obtains the object using the hash an process it depending of its type

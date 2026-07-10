@@ -242,6 +242,12 @@ type FetchOptions struct {
 	// Prune specify that local refs that match given RefSpecs and that do
 	// not exist remotely will be removed.
 	Prune bool
+	// StatusChan receives progress updates during fetch. If nil, no progress
+	// updates are sent.
+	StatusChan plumbing.StatusChan
+	// PackRefs, if true, causes the fetch to write out a packed-refs file
+	// instead of separate ref files. This is a Keybase-specific option.
+	PackRefs bool
 }
 
 // Validate validates the fields and sets the default values.
@@ -314,6 +320,9 @@ type PushOptions struct {
 	Atomic bool
 	// ProxyOptions provides info required for connecting to a proxy.
 	ProxyOptions transport.ProxyOptions
+	// StatusChan receives progress updates during push. If nil, no progress
+	// updates are sent.
+	StatusChan plumbing.StatusChan
 }
 
 // ForceWithLease sets fields on the lease

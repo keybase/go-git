@@ -30,7 +30,41 @@ func (d *DotGit) setRefRwfs(fileName, content string, old *plumbing.Reference) (
 		return err
 	}
 
-	defer ioutil.CheckClose(f, &err)
+	// KBFS-3703: recover from a failed write by restoring the previous ref
+	// content. Without recovery, a partially-written ref file can corrupt the
+	// repository. The plain ioutil.CheckClose only propagates the close error;
+	// it does not attempt to restore the original content when the write fails.
+	defer func() {
+		realErr := err
+		ioutil.CheckClose(f, &err)
+		if err == nil {
+			return
+		}
+		// Write failed with an existing ref; KBFS atomic semantics mean the
+		// file was not modified — leave the error standing without restoring.
+		if old != nil && realErr != nil {
+			return
+		}
+		// If old is nil, the file was created new — remove it.
+		if old == nil {
+			_ = d.fs.Remove(fileName)
+			return
+		}
+		// Restore the original ref content.
+		var oldContent string
+		switch old.Type() {
+		case plumbing.SymbolicReference:
+			oldContent = fmt.Sprintf("ref: %s\n", old.Target())
+		case plumbing.HashReference:
+			oldContent = fmt.Sprintln(old.Hash().String())
+		}
+		f2, openErr := d.fs.OpenFile(fileName, os.O_RDWR|os.O_TRUNC, 0666)
+		if openErr != nil {
+			return
+		}
+		_, _ = f2.Write([]byte(oldContent))
+		_ = f2.Close()
+	}()
 
 	// Lock is unlocked by the deferred Close above. This is because Unlock
 	// does not imply a fsync and thus there would be a race between
