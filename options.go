@@ -245,9 +245,6 @@ type FetchOptions struct {
 	// StatusChan receives progress updates during fetch. If nil, no progress
 	// updates are sent.
 	StatusChan plumbing.StatusChan
-	// PackRefs, if true, causes the fetch to write out a packed-refs file
-	// instead of separate ref files. This is a Keybase-specific option.
-	PackRefs bool
 }
 
 // Validate validates the fields and sets the default values.
