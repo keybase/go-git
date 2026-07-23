@@ -95,6 +95,29 @@ func (s *EncoderSuite) TestHashNotFound() {
 	s.ErrorIs(err, plumbing.ErrObjectNotFound)
 }
 
+func (s *EncoderSuite) TestEncodeWithStatus() {
+	o := &plumbing.MemoryObject{}
+	o.SetType(plumbing.BlobObject)
+	o.SetSize(0)
+	_, err := s.store.SetEncodedObject(o)
+	s.NoError(err)
+
+	updates := make(chan plumbing.StatusUpdate, 50)
+	_, err = s.enc.EncodeWithStatus([]plumbing.Hash{o.Hash()}, 10, updates)
+	s.NoError(err)
+	close(updates)
+
+	var lastSend plumbing.StatusUpdate
+	for update := range updates {
+		if update.Stage == plumbing.StatusSend {
+			lastSend = update
+		}
+	}
+	s.Equal(plumbing.StatusSend, lastSend.Stage)
+	s.Equal(1, lastSend.ObjectsTotal)
+	s.Equal(1, lastSend.ObjectsDone)
+}
+
 func (s *EncoderSuite) TestDecodeEncodeWithDeltaDecodeREF() {
 	s.enc = NewEncoder(s.buf, s.store, true)
 	s.simpleDeltaTest()
@@ -199,7 +222,7 @@ func (s *EncoderSuite) simpleDeltaTest() {
 	encHash, err := s.enc.encode([]*ObjectToPack{
 		srcToPack,
 		newDeltaObjectToPack(srcToPack, targetObject, deltaObject),
-	})
+	}, nil)
 	s.NoError(err)
 
 	p, cleanup := packfileFromReader(s, s.buf)
@@ -238,7 +261,7 @@ func (s *EncoderSuite) deltaOverDeltaTest() {
 		srcToPack,
 		newDeltaObjectToPack(srcToPack, targetObject, deltaObject),
 		newDeltaObjectToPack(targetToPack, otherTargetObject, otherDeltaObject),
-	})
+	}, nil)
 	s.NoError(err)
 
 	p, cleanup := packfileFromReader(s, s.buf)
@@ -310,7 +333,7 @@ func (s *EncoderSuite) deltaOverDeltaCyclicTest() {
 		pd2,
 		pd3,
 		pd4,
-	})
+	}, nil)
 	s.NoError(err)
 
 	p, cleanup := packfileFromReader(s, s.buf)

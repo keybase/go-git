@@ -23,6 +23,17 @@ type ObjectSelector interface {
 	ObjectsToPack(hashes []plumbing.Hash, packWindow uint) ([]*ObjectToPack, error)
 }
 
+// StatusObjectSelector is an optional extension to ObjectSelector that reports
+// progress while selecting objects for a pack.
+type StatusObjectSelector interface {
+	ObjectSelector
+	ObjectsToPackWithStatus(
+		hashes []plumbing.Hash,
+		packWindow uint,
+		statusChan plumbing.StatusChan,
+	) ([]*ObjectToPack, error)
+}
+
 // Encoder gets the data from the storage and write it into the writer in PACK
 // format.
 //
@@ -120,15 +131,36 @@ func (e *Encoder) Encode(
 	hashes []plumbing.Hash,
 	packWindow uint,
 ) (plumbing.Hash, error) {
-	objects, err := e.objectSelector.ObjectsToPack(hashes, packWindow)
+	return e.EncodeWithStatus(hashes, packWindow, nil)
+}
+
+// EncodeWithStatus creates a packfile and reports progress to statusChan.
+func (e *Encoder) EncodeWithStatus(
+	hashes []plumbing.Hash,
+	packWindow uint,
+	statusChan plumbing.StatusChan,
+) (plumbing.Hash, error) {
+	var objects []*ObjectToPack
+	var err error
+	if selector, ok := e.objectSelector.(StatusObjectSelector); ok {
+		objects, err = selector.ObjectsToPackWithStatus(hashes, packWindow, statusChan)
+	} else {
+		objects, err = e.objectSelector.ObjectsToPack(hashes, packWindow)
+	}
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
 
-	return e.encode(objects)
+	return e.encode(objects, statusChan)
 }
 
-func (e *Encoder) encode(objects []*ObjectToPack) (plumbing.Hash, error) {
+func (e *Encoder) encode(objects []*ObjectToPack, statusChan plumbing.StatusChan) (plumbing.Hash, error) {
+	update := plumbing.StatusUpdate{
+		Stage:        plumbing.StatusSend,
+		ObjectsTotal: len(objects),
+	}
+	statusChan.SendUpdate(update)
+
 	if err := e.head(len(objects)); err != nil {
 		return plumbing.ZeroHash, err
 	}
@@ -137,6 +169,8 @@ func (e *Encoder) encode(objects []*ObjectToPack) (plumbing.Hash, error) {
 		if err := e.entry(o); err != nil {
 			return plumbing.ZeroHash, err
 		}
+		update.ObjectsDone++
+		statusChan.SendUpdateIfPossible(update)
 	}
 
 	return e.footer()

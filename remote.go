@@ -200,7 +200,7 @@ func (r *Remote) sendPack(ctx context.Context, sess transport.Session, remoteRef
 	var hashesToPush []plumbing.Hash
 	// Avoid the expensive revlist operation if we're only doing deletes.
 	if !allDelete {
-		hashesToPush, err = revlist.Objects(r.s, objects, haves)
+		hashesToPush, err = revlist.ObjectsWithStatus(r.s, objects, haves, o.StatusChan)
 		if err != nil {
 			return err
 		}
@@ -523,6 +523,7 @@ func (r *Remote) fetch(ctx context.Context, o *FetchOptions) (sto storer.Referen
 			Haves:       haves,
 			Depth:       o.Depth,
 			Progress:    o.Progress,
+			StatusChan:  o.StatusChan,
 			IncludeTags: isWildcard && o.Tags == plumbing.TagFollowing,
 			Filter:      o.Filter,
 		}
@@ -1511,7 +1512,7 @@ func pushHashes(
 		req.Packfile = rd
 		go func() {
 			e := packfile.NewEncoder(wr, s, useRefDeltas)
-			if _, err := e.Encode(hs, config.Pack.Window); err != nil {
+			if _, err := e.EncodeWithStatus(hs, config.Pack.Window, o.StatusChan); err != nil {
 				done <- wr.CloseWithError(err)
 				return
 			}
