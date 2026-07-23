@@ -84,7 +84,7 @@ func (e *Encoder) encodeHashes(idx *MemoryIndex, statusChan plumbing.StatusChan)
 			return size, err
 		}
 		size += n
-		update.ObjectsDone++
+		update.ObjectsDone = int(idx.Fanout[k])
 		statusChan.SendUpdateIfPossible(update)
 	}
 	return size, nil
@@ -111,7 +111,7 @@ func (e *Encoder) encodeCRC32(idx *MemoryIndex, statusChan plumbing.StatusChan) 
 		}
 
 		size += n
-		update.ObjectsDone++
+		update.ObjectsDone = int(idx.Fanout[k])
 		statusChan.SendUpdateIfPossible(update)
 	}
 
@@ -139,7 +139,7 @@ func (e *Encoder) encodeOffsets(idx *MemoryIndex, statusChan plumbing.StatusChan
 		}
 
 		size += n
-		update.ObjectsDone++
+		update.ObjectsDone = int(idx.Fanout[k])
 		statusChan.SendUpdateIfPossible(update)
 	}
 
